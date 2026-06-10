@@ -1,0 +1,79 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Controllers;
+
+use App\Core\Auth;
+use App\Core\Controller;
+use App\Core\View;
+use App\Models\User;
+
+final class AuthController extends Controller
+{
+    public function showLogin(): void
+    {
+        View::render('auth/login', ['error' => null]);
+    }
+
+    public function login(): void
+    {
+        $username = strtolower(trim((string)($_POST['username'] ?? '')));
+        $password = (string)($_POST['password'] ?? '');
+
+        $user = User::findByUsername($username);
+        if (!$user || !password_verify($password, $user['password_hash'])) {
+            View::render('auth/login', ['error' => 'Credenciales inválidas.']);
+            return;
+        }
+        if (($user['status'] ?? 'active') !== 'active') {
+            View::render('auth/login', ['error' => 'Usuario suspendido.']);
+            return;
+        }
+
+        Auth::login((int)$user['id']);
+        $this->redirect($this->url('/'));
+    }
+
+    public function showRegister(): void
+    {
+        View::render('auth/register', ['error' => null]);
+    }
+
+    public function register(): void
+    {
+        $name = trim((string)($_POST['name'] ?? ''));
+        $username = strtolower(trim((string)($_POST['username'] ?? '')));
+        $password = (string)($_POST['password'] ?? '');
+
+        if ($name === '' || $username === '' || $password === '') {
+            View::render('auth/register', ['error' => 'Completa todos los campos.']);
+            return;
+        }
+
+        if (!preg_match('/^[a-z0-9_]{3,30}$/', $username)) {
+            View::render('auth/register', ['error' => 'Usuario: 3-30 caracteres, solo letras, números y _.']);
+            return;
+        }
+
+        if (User::findByUsername($username)) {
+            View::render('auth/register', ['error' => 'Ese usuario ya existe.']);
+            return;
+        }
+
+        try {
+            $id = User::createAsesor($name, $username, password_hash($password, PASSWORD_DEFAULT));
+        } catch (\Throwable $e) {
+            View::render('auth/register', ['error' => 'No se pudo crear la cuenta. Verifica la base de datos.']);
+            return;
+        }
+
+        Auth::login($id);
+        $this->redirect($this->url('/'));
+    }
+
+    public function logout(): void
+    {
+        Auth::logout();
+        $this->redirect($this->url('/'));
+    }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "polla/mundial-2026",
+  "description": "Polla Mundial 2026 (PHP MVC + MySQL + API-Football)",
+  "type": "project",
+  "require": {
+    "php": ">=8.1",
+    "ext-pdo": "*",
+    "ext-json": "*"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  }
+}
+

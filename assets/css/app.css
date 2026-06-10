@@ -1,0 +1,59 @@
+:root { color-scheme: dark; }
+body { background: #0b1020; color: #e8eaf1; }
+.card, .list-group-item, .dropdown-menu { background: #101a35; color: #e8eaf1; border-color: rgba(255,255,255,.06); }
+.text-muted { color: rgba(232,234,241,.7) !important; }
+.nav-link { color: rgba(232,234,241,.8); }
+.nav-link.active { color: #fff; }
+.badge-live { background: #e11d48; color: #fff; }
+.badge-ft { background: #334155; color: #e8eaf1; }
+.badge-ns { background: #1d4ed8; color: #fff; }
+.event-goal { border-left: 3px solid #22c55e; padding-left: .5rem; }
+.event-card { border-left: 3px solid #eab308; padding-left: .5rem; }
+.event-subst { border-left: 3px solid #64748b; padding-left: .5rem; }
+.match-info-dl dt { font-weight: 500; }
+.match-info-dl dd { color: #e8eaf1; }
+.prediction-rule-box { border-color: rgba(255,255,255,.12) !important; background: rgba(255,255,255,.03); }
+.prediction-outcome-option {
+  display: flex;
+  align-items: center;
+  padding: .65rem .75rem;
+  border: 1px solid rgba(255,255,255,.12);
+  border-radius: .375rem;
+  cursor: pointer;
+  background: rgba(255,255,255,.03);
+}
+.prediction-outcome-option:has(input:checked) { border-color: #1d4ed8; background: rgba(29,78,216,.15); }
+.group-standing-highlight { background: rgba(29,78,216,.18) !important; }
+.group-standings-table th, .group-standings-table td { white-space: nowrap; }
+.team-logo { width: 28px; height: 28px; object-fit: contain; }
+.bottom-nav { background: rgba(16,26,53,.92); border-top: 1px solid rgba(255,255,255,.06); }
+@media (min-width: 992px) { .bottom-nav { display: none !important; } }
+.leaderboard-row--unpaid {
+  opacity: 0.45;
+  background-color: rgba(0, 0, 0, 0.18) !important;
+}
+.leaderboard-prizes { border-color: rgba(34, 197, 94, 0.25) !important; }
+.leaderboard-prize-badge {
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.45rem 0.65rem;
+}
+.leaderboard-prize-badge--1 { background: #15803d; color: #fff; }
+.leaderboard-prize-badge--2 { background: #16a34a; color: #fff; }
+.leaderboard-prize-badge--3 { background: #22c55e; color: #fff; }
+.leaderboard-prize-badge--4 { background: #4ade80; color: #0b1020; }
+.leaderboard-prize-badge--5 { background: #86efac; color: #0b1020; }
+.leaderboard-pos {
+  font-weight: 600;
+  border-radius: 0.25rem;
+  text-align: center;
+}
+.leaderboard-pos--1 { background: #15803d; color: #fff !important; }
+.leaderboard-pos--2 { background: #16a34a; color: #fff !important; }
+.leaderboard-pos--3 { background: #22c55e; color: #fff !important; }
+.leaderboard-pos--4 { background: #4ade80; color: #0b1020 !important; }
+.leaderboard-pos--5 { background: #86efac; color: #0b1020 !important; }
+.leaderboard-row--unpaid .leaderboard-pos {
+  opacity: 1;
+}
+
