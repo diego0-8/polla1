@@ -1,0 +1,11 @@
+<?php
+declare(strict_types=1);
+
+/**
+ * Copia este archivo a local.php y coloca tu token (no commitear local.php).
+ */
+return [
+    'football_data' => [
+        'token' => 'TU_TOKEN_AQUI',
+    ],
+];
