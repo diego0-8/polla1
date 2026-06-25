@@ -9,6 +9,7 @@ use App\Helpers\MatchView;
 /** @var int $season */
 /** @var array|null $championPick */
 /** @var bool $championPickOpen */
+/** @var bool $showBetStatus */
 ?>
 
 <?php if (\App\Core\Auth::check() && !$championPick && $championPickOpen): ?>
@@ -39,7 +40,7 @@ use App\Helpers\MatchView;
     <?php else: ?>
       <div class="vstack gap-2">
         <?php foreach ($matches as $m): ?>
-          <?php $compact = true; require __DIR__ . '/../partials/match_card.php'; ?>
+          <?php $compact = true; $showBetStatus = $showBetStatus ?? false; require __DIR__ . '/../partials/match_card.php'; ?>
         <?php endforeach; ?>
       </div>
     <?php endif; ?>

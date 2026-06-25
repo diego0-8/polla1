@@ -6,10 +6,14 @@ use App\Helpers\MatchView;
 
 /** @var array $m */
 /** @var bool $compact */
+/** @var bool $showBetStatus */
 $compact = $compact ?? false;
+$showBetStatus = $showBetStatus ?? false;
 $status = (string)($m['status'] ?? 'NS');
+$finished = in_array($status, ['FT', 'PEN', 'AET'], true);
 $showScore = in_array($status, ['FT', 'LIVE', 'HT', 'PEN'], true)
     || ((int)($m['home_score'] ?? 0) + (int)($m['away_score'] ?? 0)) > 0;
+$hasBet = !empty($m['has_bet']);
 ?>
 
 <a class="text-decoration-none d-block" href="<?= htmlspecialchars(Url::to('/matches/show') . '?id=' . (int)$m['id']) ?>">
@@ -58,9 +62,16 @@ $showScore = in_array($status, ['FT', 'LIVE', 'HT', 'PEN'], true)
 
     <div class="d-flex justify-content-between align-items-center mt-2 small text-muted flex-wrap gap-1">
       <span><?= htmlspecialchars(MatchView::formatKickoff((string)$m['kickoff_at'])) ?></span>
-      <?php if (!empty($m['stage'])): ?>
-        <span class="text-truncate ms-lg-2"><?= htmlspecialchars((string)$m['stage']) ?></span>
-      <?php endif; ?>
+      <div class="d-flex align-items-center gap-2 ms-lg-auto">
+        <?php if ($showBetStatus && !$finished && array_key_exists('has_bet', $m)): ?>
+          <span class="match-bet-badge <?= $hasBet ? 'match-bet-badge--yes' : 'match-bet-badge--no' ?>">
+            <?= $hasBet ? 'Pronosticado' : 'No pronosticado' ?>
+          </span>
+        <?php endif; ?>
+        <?php if (!empty($m['stage'])): ?>
+          <span class="text-truncate"><?= htmlspecialchars((string)$m['stage']) ?></span>
+        <?php endif; ?>
+      </div>
     </div>
   </div>
 </a>

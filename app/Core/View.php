@@ -27,5 +27,21 @@ final class View
 
         require $viewFile;
     }
+
+    public static function renderPartial(string $view, array $params = []): void
+    {
+        $basePath = Url::basePath();
+        $url = static fn (string $path = '/'): string => Url::to($path);
+        extract($params, EXTR_SKIP);
+
+        $viewFile = __DIR__ . '/../Views/' . $view . '.php';
+        if (!is_file($viewFile)) {
+            http_response_code(500);
+            echo "Vista no encontrada: " . htmlspecialchars($view);
+            return;
+        }
+
+        require $viewFile;
+    }
 }
 

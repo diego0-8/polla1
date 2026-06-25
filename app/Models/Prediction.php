@@ -166,4 +166,31 @@ final class Prediction
         $name = trim((string)($prediction['advances_team_name'] ?? ''));
         return $name !== '' ? $name : 'Equipo seleccionado';
     }
+
+    /** @param list<int> $matchIds @return array<int, true> */
+    public static function matchIdsWithBetsForUser(int $userId, array $matchIds): array
+    {
+        $matchIds = array_values(array_unique(array_filter(array_map('intval', $matchIds), static fn (int $id): bool => $id > 0)));
+        if ($matchIds === []) {
+            return [];
+        }
+
+        $ph = implode(',', array_fill(0, count($matchIds), '?'));
+        $st = DB::pdo()->prepare(
+            "SELECT DISTINCT match_id
+             FROM (
+                SELECT match_id FROM predictions WHERE user_id = ? AND match_id IN ($ph)
+                UNION
+                SELECT match_id FROM prop_predictions WHERE user_id = ? AND match_id IN ($ph)
+             ) bets"
+        );
+        $st->execute(array_merge([$userId], $matchIds, [$userId], $matchIds));
+
+        $result = [];
+        foreach ($st->fetchAll() ?: [] as $row) {
+            $result[(int)$row['match_id']] = true;
+        }
+
+        return $result;
+    }
 }

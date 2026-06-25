@@ -3,11 +3,13 @@ declare(strict_types=1);
 
 use App\Core\Auth;
 use App\Core\Url;
+use App\Models\User;
 use App\Services\PaymentReminderService;
 
 /** @var string $viewName */
 $authUser = Auth::user();
 $isAdmin = Auth::isAdmin();
+$isAsesor = $authUser !== null && User::hasRole((int)$authUser['id'], 'asesor');
 $showPaymentModal = Auth::shouldShowPaymentModal();
 $paymentInCountdown = $showPaymentModal && PaymentReminderService::isInCountdownWindow();
 $paymentAmountCop = number_format(PaymentReminderService::amountCop(), 0, ',', '.');
@@ -38,10 +40,14 @@ $viewFile = __DIR__ . '/../' . $viewName . '.php';
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/matches')) ?>">Partidos</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/leaderboard')) ?>">Posiciones</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/tournament-pick')) ?>">Campeón</a></li>
+          <?php if ($isAsesor): ?>
+            <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/pronosticos')) ?>">Pronósticos</a></li>
+          <?php endif; ?>
           <?php if ($isAdmin): ?>
             <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/admin/users')) ?>">Admin</a></li>
             <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/admin/matches/manual')) ?>">Manual</a></li>
             <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/admin/predictions')) ?>">Auditoría</a></li>
+            <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/admin/total-p')) ?>">Total P</a></li>
           <?php endif; ?>
         </ul>
         <div class="d-flex gap-2">

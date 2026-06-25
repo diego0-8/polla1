@@ -6,6 +6,7 @@ namespace App\Models;
 use App\Core\DB;
 use App\Helpers\TeamName;
 use App\Services\TournamentTeamStatusService;
+use App\Services\UserPredictionBreakdown;
 
 final class UserPoints
 {
@@ -334,103 +335,31 @@ final class UserPoints
         }
 
         $matchId = (int)$matchRow['match_id'];
-        $status = strtoupper((string)($matchRow['status'] ?? 'NS'));
-        $finished = in_array($status, ['FT', 'PEN', 'AET'], true);
         $key = $userId . ':' . $matchId;
         $bets = $predictionsByKey[$key] ?? ['predictions' => [], 'props' => []];
         $ledgerRows = $ledgerByKey[$key] ?? [];
 
-        $pointsByPredId = [];
-        $pointsByPropId = [];
-        foreach ($ledgerRows as $entry) {
-            if ($entry['prediction_id'] !== null) {
-                $pointsByPredId[$entry['prediction_id']] = $entry['points'];
-            }
-            if ($entry['prop_prediction_id'] !== null) {
-                $pointsByPropId[$entry['prop_prediction_id']] = $entry['points'];
-            }
-        }
-
-        $columnDefs = [
-            'exact' => ['label' => 'Exacto', 'predicted' => false, 'points' => null],
-            'gana' => ['label' => 'Gana', 'predicted' => false, 'points' => null],
-            'btts' => ['label' => 'Ambos marcan', 'predicted' => false, 'points' => null],
-            'goals' => ['label' => 'Goles', 'predicted' => false, 'points' => null],
-            'corners' => ['label' => 'Corners', 'predicted' => false, 'points' => null],
-            'cards' => ['label' => 'Tarjetas', 'predicted' => false, 'points' => null],
-        ];
-
-        foreach ($bets['predictions'] as $pred) {
-            $predId = (int)$pred['id'];
-            $predType = (string)$pred['pred_type'];
-            $colKey = match ($predType) {
-                'exact' => 'exact',
-                'outcome', 'advance' => 'gana',
-                default => null,
-            };
-            if ($colKey === null) {
-                continue;
-            }
-
-            $columnDefs[$colKey]['predicted'] = true;
-            if ($finished && array_key_exists($predId, $pointsByPredId)) {
-                $columnDefs[$colKey]['points'] = $pointsByPredId[$predId];
-            }
-        }
-
-        $propColMap = [
-            'btts' => 'btts',
-            'goals_ou' => 'goals',
-            'corners_ou' => 'corners',
-            'cards_ou' => 'cards',
-        ];
-        foreach ($bets['props'] as $prop) {
-            $propId = (int)$prop['id'];
-            $market = (string)$prop['market'];
-            $colKey = $propColMap[$market] ?? null;
-            if ($colKey === null) {
-                continue;
-            }
-
-            $columnDefs[$colKey]['predicted'] = true;
-            if ($finished && array_key_exists($propId, $pointsByPropId)) {
-                $columnDefs[$colKey]['points'] = $pointsByPropId[$propId];
-            }
-        }
-
-        $columns = [];
-        $total = 0;
-        $anyPredicted = false;
-        foreach ($columnDefs as $col) {
-            if (!$col['predicted']) {
-                continue;
-            }
-            $anyPredicted = true;
-            $points = $col['points'];
-            if ($points !== null) {
-                $total += $points;
-            }
-            $columns[] = [
-                'label' => $col['label'],
-                'points' => $points,
-            ];
-        }
-
-        $isSettled = $finished && $anyPredicted && array_reduce(
-            $columns,
-            static fn (bool $ok, array $c): bool => $ok && $c['points'] !== null,
-            true,
+        $result = UserPredictionBreakdown::forMatch(
+            $userId,
+            array_merge($matchRow, ['id' => $matchId]),
+            $bets,
+            $ledgerRows,
         );
 
+        $columns = [];
+        foreach ($result['columns'] as $col) {
+            $columns[] = ['label' => $col['label'], 'points' => $col['points']];
+        }
+
         return [
-            'match_id' => $matchId,
-            'label' => (string)$matchRow['home_name'] . ' vs ' . (string)$matchRow['away_name'],
-            'kickoff_at' => (string)$matchRow['kickoff_at'],
-            'status' => $status,
-            'is_finished' => $finished,
-            'is_settled' => $isSettled,
+            'match_id' => $result['match_id'],
+            'label' => $result['label'],
+            'kickoff_at' => $result['kickoff_at'],
+            'status' => $result['status'],
+            'is_finished' => $result['is_finished'],
+            'is_settled' => $result['is_settled'],
             'columns' => $columns,
-            'total' => $total,
+            'total' => $result['total'],
         ];
     }
 }

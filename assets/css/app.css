@@ -7,6 +7,24 @@ body { background: #0b1020; color: #e8eaf1; }
 .badge-live { background: #e11d48; color: #fff; }
 .badge-ft { background: #334155; color: #e8eaf1; }
 .badge-ns { background: #1d4ed8; color: #fff; }
+.match-bet-badge {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.match-bet-badge--yes {
+  background: rgba(34, 197, 94, 0.2);
+  color: #86efac;
+  border: 1px solid rgba(34, 197, 94, 0.45);
+}
+.match-bet-badge--no {
+  background: rgba(220, 53, 69, 0.18);
+  color: #fca5a5;
+  border: 1px solid rgba(220, 53, 69, 0.45);
+}
 .event-goal { border-left: 3px solid #22c55e; padding-left: .5rem; }
 .event-card { border-left: 3px solid #eab308; padding-left: .5rem; }
 .event-corner { border-left: 3px solid #3b82f6; padding-left: .5rem; }
@@ -124,6 +142,41 @@ body { background: #0b1020; color: #e8eaf1; }
   color: #000 !important;
   font-weight: 600;
   white-space: nowrap;
+}
+
+.pronosticos-row--missing {
+  border-color: rgba(220, 53, 69, 0.55) !important;
+  background: rgba(220, 53, 69, 0.12);
+}
+.pronosticos-row--missing .accordion-button {
+  background: rgba(220, 53, 69, 0.18);
+}
+.pronosticos-row--missing .accordion-button:not(.collapsed) {
+  background: rgba(220, 53, 69, 0.28);
+}
+.pronosticos-row--missing .pronosticos-match-teams {
+  color: #fff !important;
+  font-weight: 700;
+}
+.pronosticos-match-teams {
+  font-weight: 600;
+}
+.pronosticos-filters .form-label {
+  color: rgba(232, 234, 241, 0.7);
+}
+.pronosticos-pagination .page-link {
+  background: #101a35;
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(232, 234, 241, 0.9);
+}
+.pronosticos-pagination .page-item.active .page-link {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.pronosticos-pagination .page-item.disabled .page-link {
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(232, 234, 241, 0.4);
 }
 
 #paymentReminderModal .modal-content,
