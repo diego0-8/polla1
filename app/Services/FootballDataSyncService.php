@@ -188,10 +188,9 @@ final class FootballDataSyncService
         }
 
         $count = 0;
-        foreach (MatchDataMapper::normalizeEvents($detail) as $event) {
-            MatchEvent::upsertFromFootballData($matchId, $event);
-            $count++;
-        }
+        $normalized = MatchDataMapper::normalizeEvents($detail);
+        MatchEvent::replaceFromFootballData($matchId, $normalized);
+        $count = count($normalized);
         return $count;
     }
 
@@ -343,6 +342,53 @@ final class FootballDataSyncService
             'events' => $eventsTotal,
             'batches' => $batches,
         ];
+    }
+
+    /**
+     * Re-sincroniza partidos recientes para corregir marcadores tras VAR / goles anulados.
+     *
+     * @return array{processed:int, updated:int, errors:int}
+     */
+    public function resyncRecentScoreCorrections(int $days = 3, int $limit = 10): array
+    {
+        $st = DB::pdo()->prepare(
+            "SELECT id, api_fixture_id
+             FROM matches
+             WHERE kickoff_at >= (NOW() - INTERVAL :days DAY)
+               AND status IN ('FT', 'LIVE', 'HT', 'PEN', 'AET')
+               AND api_fixture_id > 0
+             ORDER BY last_synced_at ASC
+             LIMIT :lim"
+        );
+        $st->bindValue(':days', $days, \PDO::PARAM_INT);
+        $st->bindValue(':lim', $limit, \PDO::PARAM_INT);
+        $st->execute();
+        $rows = $st->fetchAll() ?: [];
+
+        $processed = 0;
+        $updated = 0;
+        $errors = 0;
+
+        foreach ($rows as $row) {
+            $matchId = (int)$row['id'];
+            $apiId = (int)$row['api_fixture_id'];
+            $before = MatchModel::findById($matchId);
+            try {
+                $this->syncMatchEvents($apiId, $matchId);
+                $processed++;
+                $after = MatchModel::findById($matchId);
+                if ($before && $after && (
+                    (int)$before['home_score'] !== (int)$after['home_score']
+                    || (int)$before['away_score'] !== (int)$after['away_score']
+                )) {
+                    $updated++;
+                }
+            } catch (\Throwable) {
+                $errors++;
+            }
+        }
+
+        return ['processed' => $processed, 'updated' => $updated, 'errors' => $errors];
     }
 
     private function resolveSeasonForDateRange(string $from): int

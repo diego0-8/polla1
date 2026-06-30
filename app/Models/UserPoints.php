@@ -5,6 +5,7 @@ namespace App\Models;
 
 use App\Core\DB;
 use App\Helpers\TeamName;
+use App\Services\MatchDataMapper;
 use App\Services\TournamentTeamStatusService;
 use App\Services\UserPredictionBreakdown;
 
@@ -115,6 +116,7 @@ final class UserPoints
 
         $userIds = array_map(static fn (array $r): int => (int)$r['id'], $rows);
         $ph = implode(',', array_fill(0, count($userIds), '?'));
+        [$seasonFrom, $seasonTo] = MatchModel::seasonKickoffBounds($season);
 
         $st = DB::pdo()->prepare(
             "SELECT user_id, COUNT(DISTINCT match_id) AS matches_bet
@@ -122,19 +124,21 @@ final class UserPoints
                 SELECT p.user_id, p.match_id
                 FROM predictions p
                 INNER JOIN matches m ON m.id = p.match_id
-                WHERE YEAR(m.kickoff_at) = ?
+                WHERE m.kickoff_at >= ?
+                  AND m.kickoff_at < ?
                   AND m.status IN ('FT', 'PEN', 'AET')
                 UNION
                 SELECT pp.user_id, pp.match_id
                 FROM prop_predictions pp
                 INNER JOIN matches m ON m.id = pp.match_id
-                WHERE YEAR(m.kickoff_at) = ?
+                WHERE m.kickoff_at >= ?
+                  AND m.kickoff_at < ?
                   AND m.status IN ('FT', 'PEN', 'AET')
              ) bets
              WHERE user_id IN ($ph)
              GROUP BY user_id"
         );
-        $st->execute(array_merge([$season, $season], $userIds));
+        $st->execute(array_merge([$seasonFrom, $seasonTo, $seasonFrom, $seasonTo], $userIds));
 
         $byUser = [];
         foreach ($st->fetchAll() ?: [] as $row) {
@@ -181,8 +185,12 @@ final class UserPoints
         }
 
         $ph = implode(',', array_fill(0, count($userIds), '?'));
+        [$seasonFrom, $seasonTo] = MatchModel::seasonKickoffBounds($season);
         $st = DB::pdo()->prepare(
             "SELECT lm.user_id, lm.match_id, m.kickoff_at, m.status,
+                    m.home_score, m.away_score,
+                    m.regular_home_score, m.regular_away_score,
+                    m.penalty_home_score, m.penalty_away_score,
                     th.name AS home_name, th.code AS home_code, th.api_team_id AS home_api_team_id,
                     ta.name AS away_name, ta.code AS away_code, ta.api_team_id AS away_api_team_id
              FROM (
@@ -199,13 +207,15 @@ final class UserPoints
                             SELECT p.user_id, p.match_id
                             FROM predictions p
                             INNER JOIN matches m ON m.id = p.match_id
-                            WHERE YEAR(m.kickoff_at) = ?
+                            WHERE m.kickoff_at >= ?
+                              AND m.kickoff_at < ?
                               AND m.status IN ('FT', 'PEN', 'AET')
                             UNION
                             SELECT pp.user_id, pp.match_id
                             FROM prop_predictions pp
                             INNER JOIN matches m ON m.id = pp.match_id
-                            WHERE YEAR(m.kickoff_at) = ?
+                            WHERE m.kickoff_at >= ?
+                              AND m.kickoff_at < ?
                               AND m.status IN ('FT', 'PEN', 'AET')
                         ) all_bets
                     ) b
@@ -218,7 +228,7 @@ final class UserPoints
              INNER JOIN teams ta ON ta.id = m.away_team_id
              WHERE lm.user_id IN ($ph)"
         );
-        $st->execute(array_merge([$season, $season], $userIds));
+        $st->execute(array_merge([$seasonFrom, $seasonTo, $seasonFrom, $seasonTo], $userIds));
 
         $result = [];
         foreach ($st->fetchAll() ?: [] as $row) {
@@ -348,14 +358,22 @@ final class UserPoints
 
         $columns = [];
         foreach ($result['columns'] as $col) {
-            $columns[] = ['label' => $col['label'], 'points' => $col['points']];
+            $columns[] = [
+                'label' => $col['label'],
+                'points' => $col['points'],
+                'pick' => $col['pick'] ?? null,
+            ];
         }
+
+        $scoring = MatchDataMapper::scoresForSettlement($matchRow);
+        $settlementScore = $scoring['home'] . ' : ' . $scoring['away'];
 
         return [
             'match_id' => $result['match_id'],
             'label' => $result['label'],
             'kickoff_at' => $result['kickoff_at'],
             'status' => $result['status'],
+            'settlement_score' => $settlementScore,
             'is_finished' => $result['is_finished'],
             'is_settled' => $result['is_settled'],
             'columns' => $columns,

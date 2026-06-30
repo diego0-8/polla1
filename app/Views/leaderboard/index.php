@@ -22,6 +22,8 @@ $colspan = 13;
     <h5 class="mb-0">Tabla de posiciones — Mundial <?= (int)$season ?></h5>
     <div class="small text-muted">
       PJ = partidos finalizados del torneo · PA = partidos apostados que ya finalizaron.
+      Exacto, Gana (fase de grupos), goles y ambos marcan usan el marcador al final del tiempo suplementario.
+      En eliminatorias, «Gana» cuenta quien clasifica (penales si aplica).
       Campeón: +20 en verde si tu selección sigue en el torneo; +20 en rojo si fue eliminada.
     </div>
   </div>
@@ -122,6 +124,12 @@ $colspan = 13;
                   <div class="small mb-2">
                     <?= htmlspecialchars((string)$lastMatch['label']) ?>
                     <span class="text-muted">· <?= htmlspecialchars(MatchView::formatKickoff((string)$lastMatch['kickoff_at'])) ?></span>
+                    <?php if (!empty($lastMatch['settlement_score']) && in_array(strtoupper((string)($lastMatch['status'] ?? '')), ['FT', 'PEN', 'AET'], true)): ?>
+                      <span class="text-muted">· Resultado reglamentario: <strong><?= htmlspecialchars((string)$lastMatch['settlement_score']) ?></strong></span>
+                      <?php if (strtoupper((string)($lastMatch['status'] ?? '')) === 'PEN'): ?>
+                        <span class="text-muted">(def. penales)</span>
+                      <?php endif; ?>
+                    <?php endif; ?>
                   </div>
                   <?php if (!empty($lastMatch['columns'])): ?>
                     <div class="table-responsive">

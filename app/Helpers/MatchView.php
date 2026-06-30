@@ -192,8 +192,8 @@ final class MatchView
         }
         if ($type === 'goal') {
             return match (strtoupper($detail)) {
-                'PENALTY' => 'Penal',
-                'OWN' => 'Autogol',
+                'PENALTY', 'PENALTY_SHOOTOUT', 'PEN' => 'Penal',
+                'OWN', 'OWN_GOAL' => 'Autogol',
                 'REGULAR' => 'Juego',
                 default => $detail !== '' ? $detail : 'Gol',
             };
@@ -457,5 +457,43 @@ final class MatchView
             $groups[$key][] = $m;
         }
         return $groups;
+    }
+
+    /**
+     * Marcador para UI: 90 min / prórroga y tanda de penales por separado.
+     *
+     * @param array<string, mixed> $match
+     * @return array{
+     *   home:int,away:int,
+     *   show_penalties:bool,
+     *   pen_home:?int,pen_away:?int,
+     *   pen_line:?string
+     * }
+     */
+    public static function scorePresentation(array $match): array
+    {
+        $status = strtoupper((string)($match['status'] ?? 'NS'));
+        $home = (int)($match['regular_home_score'] ?? $match['home_score'] ?? 0);
+        $away = (int)($match['regular_away_score'] ?? $match['away_score'] ?? 0);
+
+        if ($status === 'AET') {
+            $home = (int)($match['home_score'] ?? $home);
+            $away = (int)($match['away_score'] ?? $away);
+        }
+
+        $penHome = isset($match['penalty_home_score']) && $match['penalty_home_score'] !== null
+            ? (int)$match['penalty_home_score'] : null;
+        $penAway = isset($match['penalty_away_score']) && $match['penalty_away_score'] !== null
+            ? (int)$match['penalty_away_score'] : null;
+        $showPen = $status === 'PEN' && $penHome !== null && $penAway !== null;
+
+        return [
+            'home' => $home,
+            'away' => $away,
+            'show_penalties' => $showPen,
+            'pen_home' => $penHome,
+            'pen_away' => $penAway,
+            'pen_line' => $showPen ? sprintf('Penales %d - %d', $penHome, $penAway) : null,
+        ];
     }
 }

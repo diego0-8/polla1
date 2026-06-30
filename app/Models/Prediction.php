@@ -77,6 +77,43 @@ final class Prediction
         return self::exactForUserMatch($userId, $matchId);
     }
 
+    /**
+     * @return array{exact:?array, outcome:?array, advance:?array}
+     */
+    public static function myBundleForMatch(int $matchId): array
+    {
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        if ($userId <= 0) {
+            return ['exact' => null, 'outcome' => null, 'advance' => null];
+        }
+
+        $st = DB::pdo()->prepare(
+            'SELECT p.*, t.name AS advances_team_name, t.code AS advances_team_code, t.api_team_id AS advances_team_api_id
+             FROM predictions p
+             LEFT JOIN teams t ON t.id = p.advances_team_id
+             WHERE p.user_id = :user_id AND p.match_id = :match_id'
+        );
+        $st->execute(['user_id' => $userId, 'match_id' => $matchId]);
+
+        $result = ['exact' => null, 'outcome' => null, 'advance' => null];
+        foreach ($st->fetchAll() ?: [] as $row) {
+            $type = (string)($row['pred_type'] ?? '');
+            if ($type === 'advance') {
+                $row = TeamName::applyToTeamField(
+                    $row,
+                    'advances_team_name',
+                    'advances_team_code',
+                    'advances_team_api_id',
+                );
+            }
+            if (array_key_exists($type, $result)) {
+                $result[$type] = $row;
+            }
+        }
+
+        return $result;
+    }
+
     public static function createExact(
         int $userId,
         int $matchId,
@@ -189,6 +226,33 @@ final class Prediction
         $result = [];
         foreach ($st->fetchAll() ?: [] as $row) {
             $result[(int)$row['match_id']] = true;
+        }
+
+        return $result;
+    }
+
+    /** @return array<string, array{points:int, reason:string}> */
+    public static function myLedgerByTypeForMatch(int $matchId): array
+    {
+        $userId = (int)($_SESSION['user_id'] ?? 0);
+        if ($userId <= 0) {
+            return [];
+        }
+
+        $st = DB::pdo()->prepare(
+            'SELECT p.pred_type, pl.points, pl.reason
+             FROM predictions p
+             INNER JOIN points_ledger pl ON pl.prediction_id = p.id
+             WHERE p.user_id = :user_id AND p.match_id = :match_id'
+        );
+        $st->execute(['user_id' => $userId, 'match_id' => $matchId]);
+
+        $result = [];
+        foreach ($st->fetchAll() ?: [] as $row) {
+            $result[(string)$row['pred_type']] = [
+                'points' => (int)$row['points'],
+                'reason' => (string)$row['reason'],
+            ];
         }
 
         return $result;

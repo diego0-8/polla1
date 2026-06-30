@@ -1,3 +1,36 @@
-/vendor/
+﻿/vendor/
 /app/Config/local.php
+
+# Runtime / sync local (no subir)
+/storage/
+
+# Imagenes y assets binarios locales
+/img/*
+!/img/.gitkeep
+
+# Scripts de diagnostico, sync manual y mantenimiento
+/scripts/
+
+# Bases de datos, dumps y datos tabulares
+*.sql
+*.sqlite
+*.sqlite3
+*.db
+*.csv
+*.bak
+
+# Tests
+/tests/
+/test/
+/phpunit.xml
+phpunit.xml.dist
+
+# Logs
 /storage/logs/*.log
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

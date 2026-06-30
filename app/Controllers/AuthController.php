@@ -31,7 +31,8 @@ final class AuthController extends Controller
         }
 
         Auth::login((int)$user['id']);
-        $this->redirect($this->url('/'));
+        $dest = User::hasRole((int)$user['id'], 'asesor') ? '/cruces' : '/';
+        $this->redirect($this->url($dest));
     }
 
     public function showRegister(): void
@@ -70,7 +71,7 @@ final class AuthController extends Controller
         }
 
         Auth::login($id);
-        $this->redirect($this->url('/'));
+        $this->redirect($this->url('/cruces'));
     }
 
     public function logout(): void

@@ -3,8 +3,12 @@ declare(strict_types=1);
 
 /**
  * Copia este archivo a local.php y coloca tu token (no commitear local.php).
+ *
+ * En localhost con carpeta /Polla puedes usar:
+ *   'base_path' => '/Polla',
  */
 return [
+    'base_path' => '/polla',
     'football_data' => [
         'token' => 'TU_TOKEN_AQUI',
     ],

@@ -70,7 +70,7 @@ final class ScoringService
     {
         if ($predictedTeamId !== null && $winnerTeamId !== null && $predictedTeamId === $winnerTeamId) {
             return [
-                'points' => self::configInt('ko_advancer_points', 2),
+                'points' => self::configInt('ko_advancer_points', 3),
                 'reason' => 'correct_advancer',
             ];
         }

@@ -13,6 +13,7 @@ use App\Models\MatchModel;
 use App\Models\MatchStats;
 use App\Models\Prediction;
 use App\Models\PropPrediction;
+use App\Services\MatchDataMapper;
 use App\Services\MatchLiveRefreshService;
 use App\Services\WorldCupVenueResolver;
 final class MatchController extends Controller
@@ -41,7 +42,6 @@ final class MatchController extends Controller
         }
 
         MatchLiveRefreshService::refreshIfNeeded($match);
-        $match = MatchModel::findById($id) ?? $match;
 
         $apiEvents = MatchEvent::forMatch($id);
         $match = ManualMatchUpdate::applyToMatch($match, $apiEvents);
@@ -64,9 +64,6 @@ final class MatchController extends Controller
 
         $season = MatchModel::seasonYear();
         $groupCode = trim((string)($match['group_code'] ?? ''));
-        if ($groupCode !== '') {
-            MatchLiveRefreshService::refreshStandingsIfNeeded();
-        }
         $groupStandings = $groupCode !== ''
             ? GroupStanding::forGroup($season, $groupCode)
             : [];
@@ -76,12 +73,20 @@ final class MatchController extends Controller
             MatchModel::persistVenueIfEmpty((int)$match['id'], $match['venue']);
         }
 
+        $status = (string)($match['status'] ?? 'NS');
+        $isFinished = in_array(strtoupper($status), ['FT', 'PEN', 'AET'], true);
+        $predictionLedger = $isFinished ? Prediction::myLedgerByTypeForMatch($id) : [];
+        $settlementScore = MatchDataMapper::scoresForSettlement($match);
+
         View::render('matches/show', [
             'match' => $match,
             'events' => $events,
             'exactPrediction' => $exactPrediction,
             'outcomePrediction' => $outcomePrediction,
             'advancePrediction' => $advancePrediction,
+            'predictionLedger' => $predictionLedger,
+            'settlementScore' => $settlementScore,
+            'isFinished' => $isFinished,
             'predictionFlash' => $predictionFlash,
             'predictionError' => $predictionError,
             'propFlash' => $propFlash,

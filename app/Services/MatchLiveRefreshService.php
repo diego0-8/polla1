@@ -7,7 +7,7 @@ use App\Models\ManualMatchUpdate;
 use App\Models\MatchModel;
 
 /**
- * Refresca partidos desde la API. La sync pesada se ejecuta tras enviar la respuesta HTTP.
+ * Refresca partidos desde la API en segundo plano tras enviar la respuesta HTTP.
  */
 final class MatchLiveRefreshService
 {
@@ -17,6 +17,30 @@ final class MatchLiveRefreshService
 
     /** @return array{synced:bool,reason:string,detail?:array} */
     public static function refreshIfNeeded(array $match): array
+    {
+        if (PHP_SAPI !== 'cli') {
+            self::deferRefreshIfNeeded($match);
+
+            return ['synced' => false, 'reason' => 'deferred'];
+        }
+
+        return self::executeMatchRefresh($match);
+    }
+
+    public static function deferRefreshIfNeeded(array $match): void
+    {
+        $matchId = (int)($match['id'] ?? 0);
+        if ($matchId <= 0) {
+            return;
+        }
+
+        self::deferBackgroundWork('match_' . $matchId, static function () use ($match): void {
+            self::executeMatchRefresh($match);
+        });
+    }
+
+    /** @return array{synced:bool,reason:string,detail?:array} */
+    private static function executeMatchRefresh(array $match): array
     {
         self::settleIfNeeded();
 
@@ -50,8 +74,8 @@ final class MatchLiveRefreshService
 
     public static function refreshLeaderboardIfNeeded(): void
     {
-        self::settleIfNeeded();
-        self::deferHeavySync('leaderboard', static function (): void {
+        self::deferBackgroundWork('leaderboard', static function (): void {
+            self::settleIfNeeded();
             self::runRecentScheduleSync();
         });
     }
@@ -83,8 +107,8 @@ final class MatchLiveRefreshService
     /** @return array{synced:bool,reason:string,detail?:array} */
     public static function refreshIndexIfNeeded(): array
     {
-        self::settleIfNeeded();
-        self::deferHeavySync('index', static function (): void {
+        self::deferBackgroundWork('index', static function (): void {
+            self::settleIfNeeded();
             self::runRecentScheduleSync();
             $sync = self::buildSyncService();
             $sync->syncLive();
@@ -92,7 +116,7 @@ final class MatchLiveRefreshService
             self::refreshStandingsIfNeeded();
         });
 
-        return ['synced' => true, 'reason' => 'ok'];
+        return ['synced' => false, 'reason' => 'deferred'];
     }
 
     private static function runRecentScheduleSync(): void
@@ -106,10 +130,12 @@ final class MatchLiveRefreshService
         $to = $today->format('Y-m-d');
         $sync->syncSchedule($from, $to, $season);
         $sync->syncStaleUnfinished(7, 12);
+        $sync->resyncRecentScoreCorrections(3, 8);
+        KnockoutAdvanceService::propagate($season);
     }
 
     /** @param callable():void $work */
-    private static function deferHeavySync(string $scope, callable $work): void
+    private static function deferBackgroundWork(string $scope, callable $work): void
     {
         static $queued = [];
         if (isset($queued[$scope])) {
@@ -118,18 +144,43 @@ final class MatchLiveRefreshService
         $queued[$scope] = true;
 
         register_shutdown_function(static function () use ($scope, $work): void {
-            if (connection_aborted()) {
-                return;
-            }
             if (!self::acquireScopeThrottle('bg_' . $scope, self::INDEX_THROTTLE_SECONDS)) {
                 return;
             }
+
+            self::releaseResponseToClient();
+
             try {
                 $work();
             } catch (\Throwable) {
                 // No interrumpir otros shutdown handlers.
             }
         });
+    }
+
+    /** Envía la respuesta HTML al navegador antes del trabajo pesado (API, settle). */
+    private static function releaseResponseToClient(): void
+    {
+        static $released = false;
+        if ($released) {
+            return;
+        }
+        $released = true;
+
+        if (function_exists('session_write_close')) {
+            @session_write_close();
+        }
+
+        while (ob_get_level() > 0) {
+            @ob_end_flush();
+        }
+        @flush();
+
+        if (function_exists('fastcgi_finish_request')) {
+            @fastcgi_finish_request();
+        }
+
+        ignore_user_abort(true);
     }
 
     private static function backfillVenuesIfNeeded(): void
@@ -159,6 +210,7 @@ final class MatchLiveRefreshService
         }
 
         file_put_contents($file, (string)$now);
+
         return true;
     }
 
@@ -201,6 +253,7 @@ final class MatchLiveRefreshService
         }
 
         file_put_contents($file, (string)$now);
+
         return true;
     }
 

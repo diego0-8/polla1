@@ -10,6 +10,7 @@ use App\Helpers\MatchView;
 $compact = $compact ?? false;
 $showBetStatus = $showBetStatus ?? false;
 $status = (string)($m['status'] ?? 'NS');
+$scoreLine = MatchView::scorePresentation($m);
 $finished = in_array($status, ['FT', 'PEN', 'AET'], true);
 $showScore = in_array($status, ['FT', 'LIVE', 'HT', 'PEN'], true)
     || ((int)($m['home_score'] ?? 0) + (int)($m['away_score'] ?? 0)) > 0;
@@ -33,7 +34,10 @@ $hasBet = !empty($m['has_bet']);
 
       <div class="text-center px-2">
         <?php if ($showScore): ?>
-          <div class="fw-semibold fs-5"><?= (int)$m['home_score'] ?> : <?= (int)$m['away_score'] ?></div>
+          <div class="fw-semibold fs-5"><?= $scoreLine['home'] ?> : <?= $scoreLine['away'] ?></div>
+          <?php if ($scoreLine['show_penalties']): ?>
+            <div class="small text-muted"><?= htmlspecialchars((string)$scoreLine['pen_line']) ?></div>
+          <?php endif; ?>
         <?php else: ?>
           <div class="fw-semibold text-muted">vs</div>
         <?php endif; ?>

@@ -2,13 +2,13 @@
 declare(strict_types=1);
 
 $config = [
-    'base_path' => '/Polla',
+    'base_path' => '/polla',
     'timezone' => 'America/Bogota',
     'lock_minutes' => 5,
     'exact_score_points' => 5,
     'outcome_winner_points' => 3,
     'outcome_draw_points' => 3,
-    'ko_advancer_points' => 2,
+    'ko_advancer_points' => 3,
     'champion_bonus_points' => 20,
 
     'prop_points' => [
@@ -37,7 +37,7 @@ $config = [
     ],
 
     'payment_reminder' => [
-        'deadline' => '2026-06-26 00:00:00',
+        'deadline' => '2026-07-01 18:00:00',
         'amount_cop' => 50000,
         'qr_image' => 'img/codigo-qr.jpg',
     ],
@@ -57,6 +57,9 @@ $config = [
 $localPath = __DIR__ . '/local.php';
 if (is_file($localPath)) {
     $local = require $localPath;
+    if (isset($local['base_path']) && is_string($local['base_path'])) {
+        $config['base_path'] = $local['base_path'];
+    }
     if (isset($local['football_data']) && is_array($local['football_data'])) {
         $config['football_data'] = array_merge($config['football_data'], $local['football_data']);
     }

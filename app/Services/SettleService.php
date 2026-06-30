@@ -36,10 +36,11 @@ final class SettleService
         $params = self::FINISHED_STATUSES;
 
         if (!$allSeasons) {
-            $cfg = require dirname(__DIR__) . '/Config/app.php';
-            $seasonYear = (int)($cfg['football_data']['season'] ?? 2026);
-            $sql .= ' AND YEAR(m.kickoff_at) = ?';
-            $params[] = $seasonYear;
+            $seasonYear = MatchModel::seasonYear();
+            [$seasonFrom, $seasonTo] = MatchModel::seasonKickoffBounds($seasonYear);
+            $sql .= ' AND m.kickoff_at >= ? AND m.kickoff_at < ?';
+            $params[] = $seasonFrom;
+            $params[] = $seasonTo;
         }
 
         $st = $pdo->prepare($sql);
@@ -146,10 +147,11 @@ final class SettleService
         $params = self::FINISHED_STATUSES;
 
         if (!$allSeasons) {
-            $cfg = require dirname(__DIR__) . '/Config/app.php';
-            $seasonYear = (int)($cfg['football_data']['season'] ?? 2026);
-            $sql .= ' AND YEAR(m.kickoff_at) = ?';
-            $params[] = $seasonYear;
+            $seasonYear = MatchModel::seasonYear();
+            [$seasonFrom, $seasonTo] = MatchModel::seasonKickoffBounds($seasonYear);
+            $sql .= ' AND m.kickoff_at >= ? AND m.kickoff_at < ?';
+            $params[] = $seasonFrom;
+            $params[] = $seasonTo;
         }
 
         $st = $pdo->prepare($sql);
@@ -229,8 +231,10 @@ final class SettleService
                   AND status IN ($statusPh)";
         $params = self::FINISHED_STATUSES;
         if (!$allSeasons) {
-            $sql .= ' AND YEAR(kickoff_at) = ?';
-            $params[] = $seasonYear;
+            [$seasonFrom, $seasonTo] = MatchModel::seasonKickoffBounds($seasonYear);
+            $sql .= ' AND kickoff_at >= ? AND kickoff_at < ?';
+            $params[] = $seasonFrom;
+            $params[] = $seasonTo;
         }
         $sql .= ' ORDER BY kickoff_at DESC LIMIT 1';
 
@@ -364,13 +368,12 @@ final class SettleService
         $dbMatch = MatchModel::findById($matchId);
 
         if ($dbMatch !== null) {
-            $homeScore = (int)($dbMatch['regular_home_score'] ?? $dbMatch['home_score'] ?? 0);
-            $awayScore = (int)($dbMatch['regular_away_score'] ?? $dbMatch['away_score'] ?? 0);
+            $scoring = MatchDataMapper::scoresForSettlement($dbMatch);
             $match = [
                 'id' => $matchId,
                 'status' => (string)$dbMatch['status'],
-                'home_score' => $homeScore,
-                'away_score' => $awayScore,
+                'home_score' => $scoring['home'],
+                'away_score' => $scoring['away'],
                 'home_team_id' => (int)$dbMatch['home_team_id'],
                 'away_team_id' => (int)$dbMatch['away_team_id'],
                 'winner_team_id' => $dbMatch['winner_team_id'] ?? null,
@@ -388,6 +391,12 @@ final class SettleService
         }
 
         $resolved = ManualMatchUpdate::applyToMatch($match, MatchEvent::forMatch($matchId));
+
+        if ($dbMatch !== null) {
+            $scoring = MatchDataMapper::scoresForSettlement($dbMatch);
+            $resolved['home_score'] = $scoring['home'];
+            $resolved['away_score'] = $scoring['away'];
+        }
 
         $winnerTeamId = isset($resolved['winner_team_id']) && $resolved['winner_team_id'] !== null
             ? (int)$resolved['winner_team_id']

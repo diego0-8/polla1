@@ -6,6 +6,7 @@ use App\Controllers\AdminMatchDataController;
 use App\Controllers\AdminTotalPController;
 use App\Controllers\AdminUserController;
 use App\Controllers\AuthController;
+use App\Controllers\BracketController;
 use App\Controllers\HomeController;
 use App\Controllers\LeaderboardController;
 use App\Controllers\MatchController;
@@ -22,6 +23,7 @@ use App\Middlewares\AuthMiddleware;
 $router->get('/', [HomeController::class, 'index']);
 $router->get('/matches', [MatchController::class, 'index']);
 $router->get('/matches/show', [MatchController::class, 'show']); // ?id=...
+$router->get('/cruces', [BracketController::class, 'index'], [AuthMiddleware::class]);
 $router->get('/leaderboard', [LeaderboardController::class, 'index']);
 $router->get('/tournament-pick', [TournamentPickController::class, 'show']);
 

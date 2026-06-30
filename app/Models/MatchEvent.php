@@ -16,6 +16,21 @@ final class MatchEvent
         return $st->fetchAll() ?: [];
     }
 
+    /** Reemplaza eventos API (elimina goles anulados que ya no vienen en el detalle). */
+    public static function replaceFromFootballData(int $matchId, array $events): int
+    {
+        $pdo = DB::pdo();
+        $pdo->prepare('DELETE FROM match_events WHERE match_id = :match_id')->execute(['match_id' => $matchId]);
+
+        $count = 0;
+        foreach ($events as $event) {
+            self::upsertFromFootballData($matchId, $event);
+            $count++;
+        }
+
+        return $count;
+    }
+
     public static function upsertFromFootballData(int $matchId, array $event): void
     {
         $pdo = DB::pdo();

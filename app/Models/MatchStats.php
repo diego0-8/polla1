@@ -42,8 +42,9 @@ final class MatchStats
             return $stats;
         }
 
-        $home = (int)($match['regular_home_score'] ?? $match['home_score'] ?? 0);
-        $away = (int)($match['regular_away_score'] ?? $match['away_score'] ?? 0);
+        $scoring = MatchDataMapper::scoresForSettlement($match);
+        $home = $scoring['home'];
+        $away = $scoring['away'];
 
         if ($stats === null) {
             $stats = ['match_id' => $matchId];

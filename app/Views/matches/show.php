@@ -12,6 +12,9 @@ use App\Models\Prediction;
 /** @var array|null $exactPrediction */
 /** @var array|null $outcomePrediction */
 /** @var array|null $advancePrediction */
+/** @var array<string, array{points:int, reason:string}> $predictionLedger */
+/** @var array{home:int, away:int} $settlementScore */
+/** @var bool $isFinished */
 /** @var string|null $predictionFlash */
 /** @var string|null $predictionError */
 /** @var string|null $propFlash */
@@ -32,8 +35,23 @@ $outcomeCode = $outcomePrediction ? (string)($outcomePrediction['pred_outcome'] 
 $advanceTitle = $isFinal ? '¿Quién gana la final?' : '¿Quién avanza?';
 $advanceClosedText = $isFinal ? 'No registraste ganador de la final a tiempo.' : 'No registraste clasificado a tiempo.';
 $autoRefresh = MatchView::shouldAutoRefreshMatch($match);
+$scoreLine = MatchView::scorePresentation($match);
 $appCfg = require dirname(__DIR__, 2) . '/Config/app.php';
 $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
+$outcomePts = (int)($appCfg['outcome_winner_points'] ?? 3);
+$advancePts = (int)($appCfg['ko_advancer_points'] ?? 3);
+$settlementLine = $settlementScore['home'] . ' : ' . $settlementScore['away'];
+
+$predPointsBadge = static function (?array $ledger, bool $finished): string {
+    if (!$finished || $ledger === null) {
+        return '';
+    }
+    $pts = (int)$ledger['points'];
+    if ($pts > 0) {
+        return '<span class="badge bg-success ms-1">+' . $pts . ' pts</span>';
+    }
+    return '<span class="badge bg-secondary ms-1">0 pts</span>';
+};
 ?>
 
 <?php if ($autoRefresh): ?>
@@ -66,7 +84,10 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
           </div>
         </div>
         <div class="text-center">
-          <div class="fw-semibold fs-4"><?= (int)$match['home_score'] ?> : <?= (int)$match['away_score'] ?></div>
+          <div class="fw-semibold fs-4"><?= $scoreLine['home'] ?> : <?= $scoreLine['away'] ?></div>
+          <?php if ($scoreLine['show_penalties']): ?>
+            <div class="small fw-semibold text-warning"><?= htmlspecialchars((string)$scoreLine['pen_line']) ?></div>
+          <?php endif; ?>
           <span class="<?= htmlspecialchars(MatchView::statusBadgeClass($status)) ?>">
             <?= htmlspecialchars(MatchView::statusLabel($status)) ?>
           </span>
@@ -210,11 +231,10 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
     <div class="card p-3 mb-3">
       <h6 class="mb-2">Marcador exacto <span class="text-muted fw-normal">(<?= (int)$exactPts ?> pts)</span></h6>
       <p class="small text-muted mb-2">
-        Solo un pronóstico por partido. No se puede modificar después de guardarlo.
-        <?php if ($isKnockout): ?>
-          En eliminación directa cuenta el resultado de los 90 minutos más adición.
-        <?php endif; ?>
-        <?php if ($isOpen): ?>
+        Cuenta el resultado al final del tiempo suplementario (no la tanda de penales).
+        <?php if ($isFinished): ?>
+          Marcador reglamentario: <strong><?= htmlspecialchars($settlementLine) ?></strong>.
+        <?php elseif ($isOpen): ?>
           Cierra 5 minutos antes de iniciar el partido.
         <?php endif; ?>
       </p>
@@ -227,7 +247,10 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
           <span class="fw-semibold">
             <?= (int)$exactPrediction['pred_home'] ?> : <?= (int)$exactPrediction['pred_away'] ?>
           </span>
-          <span class="badge badge-ft">Guardado</span>
+          <span>
+            <span class="badge badge-ft">Guardado</span>
+            <?= $predPointsBadge($predictionLedger['exact'] ?? null, $isFinished) ?>
+          </span>
         </div>
       <?php elseif (!$isOpen): ?>
         <div class="badge badge-live">Cerrado</div>
@@ -252,12 +275,18 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
     </div>
 
     <div class="card p-3">
-      <h6 class="mb-2"><?= htmlspecialchars($isKnockout ? $advanceTitle : 'Ganador / Empate') ?></h6>
+      <h6 class="mb-2">
+        <?= htmlspecialchars($isKnockout ? $advanceTitle : 'Ganador / Empate') ?>
+        <span class="text-muted fw-normal">(<?= $isKnockout ? (int)$advancePts : (int)$outcomePts ?> pts)</span>
+      </h6>
       <p class="small text-muted mb-2">
         <?php if ($isKnockout): ?>
-          Solo puedes elegir local o visitante. Este punto extra se liquida por el equipo que clasifica.
+          Elige quién clasifica. Si hay penales, solo ellos definen este mercado (<?= (int)$advancePts ?> pts).
         <?php else: ?>
-          Solo un pronóstico por partido. No se puede modificar después de guardarlo.
+          Local, visitante o empate según el marcador al final del tiempo suplementario (<?= (int)$outcomePts ?> pts cada acierto).
+          <?php if ($isFinished): ?>
+            Resultado reglamentario: <strong><?= htmlspecialchars($settlementLine) ?></strong>.
+          <?php endif; ?>
         <?php endif; ?>
       </p>
 
@@ -266,12 +295,18 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
       <?php elseif ($isKnockout && $advancePrediction): ?>
         <div class="d-flex align-items-center justify-content-between rounded px-2 py-2 bg-dark bg-opacity-25">
           <span class="fw-semibold"><?= htmlspecialchars(Prediction::advanceLabel($advancePrediction)) ?></span>
-          <span class="badge badge-ft">Guardado</span>
+          <span>
+            <span class="badge badge-ft">Guardado</span>
+            <?= $predPointsBadge($predictionLedger['advance'] ?? null, $isFinished) ?>
+          </span>
         </div>
       <?php elseif (!$isKnockout && $outcomePrediction): ?>
         <div class="d-flex align-items-center justify-content-between rounded px-2 py-2 bg-dark bg-opacity-25">
           <span class="fw-semibold"><?= htmlspecialchars(Prediction::outcomeLabel($outcomeCode, $match)) ?></span>
-          <span class="badge badge-ft">Guardado</span>
+          <span>
+            <span class="badge badge-ft">Guardado</span>
+            <?= $predPointsBadge($predictionLedger['outcome'] ?? null, $isFinished) ?>
+          </span>
         </div>
       <?php elseif ($isKnockout && $isOpen && !$canPredictAdvance): ?>
         <div class="text-muted small">Los equipos aún no están confirmados. Vuelve cuando se definan los rivales.</div>
@@ -285,12 +320,12 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
           <label class="prediction-outcome-option">
             <input type="radio" name="advances_team_id" value="<?= (int)$match['home_team_id'] ?>" class="form-check-input me-2" required>
             <span class="fw-semibold"><?= htmlspecialchars((string)$match['home_name']) ?></span>
-            <span class="badge badge-ns ms-1">2 pts</span>
+            <span class="badge badge-ns ms-1"><?= (int)$advancePts ?> pts</span>
           </label>
           <label class="prediction-outcome-option">
             <input type="radio" name="advances_team_id" value="<?= (int)$match['away_team_id'] ?>" class="form-check-input me-2">
             <span class="fw-semibold"><?= htmlspecialchars((string)$match['away_name']) ?></span>
-            <span class="badge badge-ns ms-1">2 pts</span>
+            <span class="badge badge-ns ms-1"><?= (int)$advancePts ?> pts</span>
           </label>
           <button class="btn btn-light w-100 btn-sm mt-1">Guardar <?= htmlspecialchars(strtolower($advanceTitle)) ?></button>
         </form>
@@ -302,18 +337,18 @@ $exactPts = (int)($appCfg['exact_score_points'] ?? 5);
             <input type="radio" name="pred_outcome" value="H" class="form-check-input me-2" required>
             <span class="fw-semibold">Local</span>
             <span class="text-muted">· <?= htmlspecialchars((string)$match['home_name']) ?></span>
-            <span class="badge badge-ns ms-1">3 pts</span>
+            <span class="badge badge-ns ms-1"><?= (int)$outcomePts ?> pts</span>
           </label>
           <label class="prediction-outcome-option">
             <input type="radio" name="pred_outcome" value="D" class="form-check-input me-2">
             <span class="fw-semibold">Empate</span>
-            <span class="badge badge-ft ms-1">3 pts</span>
+            <span class="badge badge-ft ms-1"><?= (int)$outcomePts ?> pts</span>
           </label>
           <label class="prediction-outcome-option">
             <input type="radio" name="pred_outcome" value="A" class="form-check-input me-2">
             <span class="fw-semibold">Visitante</span>
             <span class="text-muted">· <?= htmlspecialchars((string)$match['away_name']) ?></span>
-            <span class="badge badge-ns ms-1">3 pts</span>
+            <span class="badge badge-ns ms-1"><?= (int)$outcomePts ?> pts</span>
           </label>
           <button class="btn btn-light w-100 btn-sm mt-1">Guardar ganador/empate</button>
         </form>

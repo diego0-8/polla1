@@ -22,6 +22,141 @@ final class MatchDataMapper
         };
     }
 
+    /** Estado interno según status API + score.duration (prórroga / penales). */
+    public static function mapStatusFromMatch(array $match): string
+    {
+        $status = self::mapStatus((string)($match['status'] ?? 'NS'));
+        if ($status !== 'FT') {
+            return $status;
+        }
+
+        $duration = strtoupper((string)($match['score']['duration'] ?? ''));
+        return match ($duration) {
+            'PENALTY_SHOOTOUT' => 'PEN',
+            'EXTRA_TIME' => 'AET',
+            default => 'FT',
+        };
+    }
+
+    public static function isPenaltyShootout(array $match): bool
+    {
+        return strtoupper((string)($match['score']['duration'] ?? '')) === 'PENALTY_SHOOTOUT';
+    }
+
+    public static function isExtraTimeFinish(array $match): bool
+    {
+        return strtoupper((string)($match['score']['duration'] ?? '')) === 'EXTRA_TIME';
+    }
+
+    /**
+     * Marcador de penales (tanda). fullTime suele traer el resultado final de penales.
+     *
+     * @return array{home:int,away:int}|null
+     */
+    public static function penaltyScores(array $match): ?array
+    {
+        if (!self::isPenaltyShootout($match)) {
+            return null;
+        }
+
+        $score = $match['score'] ?? [];
+        $ft = $score['fullTime'] ?? [];
+        $pen = $score['penalties'] ?? [];
+
+        if (isset($ft['home'], $ft['away']) && (int)$ft['home'] !== (int)$ft['away']) {
+            return ['home' => (int)$ft['home'], 'away' => (int)$ft['away']];
+        }
+
+        if (isset($pen['home'], $pen['away'])) {
+            return ['home' => (int)$pen['home'], 'away' => (int)$pen['away']];
+        }
+
+        return null;
+    }
+
+    /** @return array{home:int,away:int} */
+    public static function regularTimeFromApi(array $match): array
+    {
+        $score = $match['score'] ?? [];
+        $reg = $score['regularTime'] ?? [];
+        if (isset($reg['home'], $reg['away'])) {
+            return ['home' => (int)$reg['home'], 'away' => (int)$reg['away']];
+        }
+
+        return self::reconcileScores($match);
+    }
+
+    /**
+     * Marcadores para guardar en BD (90 min / prórroga vs penales por separado).
+     *
+     * @return array{
+     *   home:int,away:int,
+     *   regular_home:int,regular_away:int,
+     *   penalty_home:?int,penalty_away:?int
+     * }
+     */
+    public static function resolveStoredScores(array $match): array
+    {
+        if (self::isPenaltyShootout($match)) {
+            $reg = self::regularTimeFromApi($match);
+            $pen = self::penaltyScores($match);
+
+            return [
+                'home' => $reg['home'],
+                'away' => $reg['away'],
+                'regular_home' => $reg['home'],
+                'regular_away' => $reg['away'],
+                'penalty_home' => $pen['home'] ?? null,
+                'penalty_away' => $pen['away'] ?? null,
+            ];
+        }
+
+        $scores = self::reconcileScores($match);
+        $regular = self::regularTimeScores($match);
+
+        return [
+            'home' => $scores['home'],
+            'away' => $scores['away'],
+            'regular_home' => $regular['home'] ?? $scores['home'],
+            'regular_away' => $regular['away'] ?? $scores['away'],
+            'penalty_home' => null,
+            'penalty_away' => null,
+        ];
+    }
+
+    /**
+     * Marcador reglamentario para liquidar exacto, gana y props basados en goles.
+     * PEN: empate 90 min + prórroga (nunca la tanda de penales).
+     * AET: marcador tras prórroga.
+     * FT: tiempo reglamentario (90 min).
+     *
+     * @param array<string, mixed> $dbMatch Fila de matches (status, home_score, regular_*, penalty_*).
+     * @return array{home:int, away:int}
+     */
+    public static function scoresForSettlement(array $dbMatch): array
+    {
+        $status = strtoupper((string)($dbMatch['status'] ?? ''));
+
+        if ($status === 'PEN') {
+            return [
+                'home' => (int)($dbMatch['regular_home_score'] ?? $dbMatch['home_score'] ?? 0),
+                'away' => (int)($dbMatch['regular_away_score'] ?? $dbMatch['away_score'] ?? 0),
+            ];
+        }
+
+        if ($status === 'AET') {
+            return [
+                'home' => (int)($dbMatch['home_score'] ?? 0),
+                'away' => (int)($dbMatch['away_score'] ?? 0),
+            ];
+        }
+
+        return [
+            'home' => (int)($dbMatch['regular_home_score'] ?? $dbMatch['home_score'] ?? 0),
+            'away' => (int)($dbMatch['regular_away_score'] ?? $dbMatch['away_score'] ?? 0),
+        ];
+    }
+
     public static function parseGroupCode(array $match): ?string
     {
         $group = strtoupper(trim((string)($match['group'] ?? '')));
@@ -120,10 +255,153 @@ final class MatchDataMapper
             $home = $score['regularTime']['home'] ?? 0;
             $away = $score['regularTime']['away'] ?? 0;
         }
+
         return [
             'home' => (int)($home ?? 0),
             'away' => (int)($away ?? 0),
         ];
+    }
+
+    /**
+     * Marcador coherente con goles listados y desglose HT/ET (goles anulados por VAR).
+     *
+     * @return array{home:int,away:int}
+     */
+    public static function reconcileScores(array $match): array
+    {
+        if (self::isPenaltyShootout($match)) {
+            return self::regularTimeFromApi($match);
+        }
+
+        $scores = self::scores($match);
+        $fromGoals = self::scoreFromGoalsList($match);
+        $goalsListed = $match['goals'] ?? [];
+        $listedCount = is_array($goalsListed) ? count($goalsListed) : 0;
+        $scoreTotal = $scores['home'] + $scores['away'];
+
+        if ($fromGoals !== null && $listedCount > 0) {
+            $goalTotal = $fromGoals['home'] + $fromGoals['away'];
+            if ($fromGoals['home'] !== $scores['home'] || $fromGoals['away'] !== $scores['away']) {
+                return $fromGoals;
+            }
+            if ($goalTotal < $scoreTotal) {
+                return $fromGoals;
+            }
+        }
+
+        $scoreBlock = $match['score'] ?? [];
+        $ft = $scoreBlock['fullTime'] ?? [];
+        $et = $scoreBlock['extraTime'] ?? [];
+        if (!isset($ft['home'], $ft['away'])) {
+            return $scores;
+        }
+
+        $etHome = (int)($et['home'] ?? 0);
+        $etAway = (int)($et['away'] ?? 0);
+        $etTotal = $etHome + $etAway;
+        if ($etTotal <= 0) {
+            return $scores;
+        }
+
+        $ftHome = (int)$ft['home'];
+        $ftAway = (int)$ft['away'];
+        $goalsInExtra = self::countExtraTimeGoalsListed($goalsListed);
+
+        // extraTime indica goles en prórroga pero la lista no los tiene (VAR / retraso API)
+        if ($goalsInExtra < $etTotal && $listedCount < $ftHome + $ftAway) {
+            return [
+                'home' => max(0, $ftHome - $etHome),
+                'away' => max(0, $ftAway - $etAway),
+            ];
+        }
+
+        return $scores;
+    }
+
+    /**
+     * @return array{home:int,away:int}|null
+     */
+    public static function scoreFromGoalsList(array $match): ?array
+    {
+        $goals = $match['goals'] ?? [];
+        if (!is_array($goals) || $goals === []) {
+            return null;
+        }
+
+        $homeApi = (int)($match['homeTeam']['id'] ?? 0);
+        $awayApi = (int)($match['awayTeam']['id'] ?? 0);
+        if ($homeApi <= 0 || $awayApi <= 0) {
+            return null;
+        }
+
+        $home = 0;
+        $away = 0;
+        foreach ($goals as $g) {
+            if (!is_array($g) || self::isDisallowedGoalEntry($g)) {
+                continue;
+            }
+
+            $type = strtoupper((string)($g['type'] ?? 'REGULAR'));
+            if (in_array($type, ['PENALTY_SHOOTOUT'], true)) {
+                continue;
+            }
+            $teamId = (int)($g['team']['id'] ?? 0);
+            $isOwn = $type === 'OWN_GOAL';
+
+            if ($isOwn) {
+                if ($teamId === $homeApi) {
+                    $away++;
+                } elseif ($teamId === $awayApi) {
+                    $home++;
+                }
+                continue;
+            }
+
+            if ($teamId === $homeApi) {
+                $home++;
+            } elseif ($teamId === $awayApi) {
+                $away++;
+            }
+        }
+
+        return ['home' => $home, 'away' => $away];
+    }
+
+    /** @param array<string, mixed> $goal */
+    public static function isDisallowedGoalEntry(array $goal): bool
+    {
+        $type = strtoupper((string)($goal['type'] ?? ''));
+        $disallowedTypes = ['CANCELLED', 'DISALLOWED', 'VAR', 'NULLIFIED', 'NO_GOAL'];
+        if (in_array($type, $disallowedTypes, true)) {
+            return true;
+        }
+
+        foreach (['description', 'detail', 'reason'] as $key) {
+            $text = strtoupper((string)($goal[$key] ?? ''));
+            if ($text !== '' && (str_contains($text, 'DISALLOW') || str_contains($text, 'VAR') || str_contains($text, 'ANUL'))) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<mixed> $goals */
+    private static function countExtraTimeGoalsListed(array $goals): int
+    {
+        $count = 0;
+        foreach ($goals as $g) {
+            if (!is_array($g) || self::isDisallowedGoalEntry($g)) {
+                continue;
+            }
+            $minute = (int)($g['minute'] ?? 0);
+            $extra = (int)($g['injuryTime'] ?? 0);
+            if ($minute > 90 || ($minute === 90 && $extra > 0) || $minute >= 91) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     public static function regularTimeScores(array $match): array
@@ -147,11 +425,21 @@ final class MatchDataMapper
     public static function winnerSide(array $match): ?string
     {
         $winner = strtoupper((string)($match['score']['winner'] ?? ''));
-        return match ($winner) {
+        $fromWinner = match ($winner) {
             'HOME_TEAM' => 'H',
             'AWAY_TEAM' => 'A',
             default => null,
         };
+        if ($fromWinner !== null) {
+            return $fromWinner;
+        }
+
+        $pens = self::penaltyScores($match);
+        if ($pens !== null && $pens['home'] !== $pens['away']) {
+            return $pens['home'] > $pens['away'] ? 'H' : 'A';
+        }
+
+        return null;
     }
 
     /**
@@ -162,6 +450,9 @@ final class MatchDataMapper
         $events = [];
 
         foreach (($matchDetail['goals'] ?? []) as $g) {
+            if (!is_array($g) || self::isDisallowedGoalEntry($g)) {
+                continue;
+            }
             $events[] = [
                 'type' => 'Goal',
                 'detail' => (string)($g['type'] ?? 'REGULAR'),

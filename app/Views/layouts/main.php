@@ -15,6 +15,8 @@ $paymentInCountdown = $showPaymentModal && PaymentReminderService::isInCountdown
 $paymentAmountCop = number_format(PaymentReminderService::amountCop(), 0, ',', '.');
 $paymentSecondsRemaining = PaymentReminderService::secondsRemaining();
 $asset = static fn (string $p): string => Url::basePath() . '/' . ltrim($p, '/');
+$appCssPath = dirname(__DIR__, 3) . '/assets/css/app.css';
+$appCssVer = is_file($appCssPath) ? (string)filemtime($appCssPath) : '1';
 
 $viewFile = __DIR__ . '/../' . $viewName . '.php';
 ?>
@@ -26,7 +28,7 @@ $viewFile = __DIR__ . '/../' . $viewName . '.php';
   <title>Polla Mundial <?= (int)\App\Helpers\MatchView::season() ?></title>
   <link rel="icon" type="image/png" href="<?= htmlspecialchars($asset('img/logo-Photoroom.png')) ?>">
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-  <link href="<?= htmlspecialchars($asset('assets/css/app.css')) ?>" rel="stylesheet">
+  <link href="<?= htmlspecialchars($asset('assets/css/app.css?v=' . $appCssVer)) ?>" rel="stylesheet">
 </head>
 <body>
   <nav class="navbar navbar-expand-lg navbar-dark" style="background:#0b1020;">
@@ -38,6 +40,9 @@ $viewFile = __DIR__ . '/../' . $viewName . '.php';
       <div class="collapse navbar-collapse" id="nav">
         <ul class="navbar-nav me-auto mb-2 mb-lg-0">
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/matches')) ?>">Partidos</a></li>
+          <?php if ($authUser): ?>
+            <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/cruces')) ?>">Cruces</a></li>
+          <?php endif; ?>
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/leaderboard')) ?>">Posiciones</a></li>
           <li class="nav-item"><a class="nav-link" href="<?= htmlspecialchars(Url::to('/tournament-pick')) ?>">Campeón</a></li>
           <?php if ($isAsesor): ?>
@@ -73,6 +78,9 @@ $viewFile = __DIR__ . '/../' . $viewName . '.php';
     <div class="container-fluid justify-content-around">
       <a class="nav-link text-center" href="<?= htmlspecialchars(Url::to('/')) ?>"><div class="small">Inicio</div></a>
       <a class="nav-link text-center" href="<?= htmlspecialchars(Url::to('/matches')) ?>"><div class="small">Partidos</div></a>
+      <?php if ($authUser): ?>
+        <a class="nav-link text-center" href="<?= htmlspecialchars(Url::to('/cruces')) ?>"><div class="small">Cruces</div></a>
+      <?php endif; ?>
       <a class="nav-link text-center" href="<?= htmlspecialchars(Url::to('/leaderboard')) ?>"><div class="small">Tabla</div></a>
       <a class="nav-link text-center" href="<?= htmlspecialchars(Url::to('/tournament-pick')) ?>"><div class="small">Campeón</div></a>
       <?php if ($authUser): ?>

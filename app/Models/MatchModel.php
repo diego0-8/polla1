@@ -46,12 +46,15 @@ final class MatchModel
              FROM matches m
              JOIN teams th ON th.id = m.home_team_id
              JOIN teams ta ON ta.id = m.away_team_id
-             WHERE DATE(m.kickoff_at) = CURDATE()
-               AND YEAR(m.kickoff_at) = :year
+             WHERE m.kickoff_at >= CURDATE()
+               AND m.kickoff_at < DATE_ADD(CURDATE(), INTERVAL 1 DAY)
+               AND m.kickoff_at >= :season_from
+               AND m.kickoff_at < :season_to
              ORDER BY m.kickoff_at ASC
              LIMIT 50'
         );
-        $st->execute(['year' => self::seasonYear()]);
+        [$seasonFrom, $seasonTo] = self::seasonKickoffBounds();
+        $st->execute(['season_from' => $seasonFrom, 'season_to' => $seasonTo]);
 
         return TeamName::applyToMatches($st->fetchAll() ?: []);
     }
@@ -150,17 +153,39 @@ final class MatchModel
         return $row ?: null;
     }
 
+    private static bool $penaltyColumnsEnsured = false;
+
+    public static function ensurePenaltyScoreColumns(): void
+    {
+        if (self::$penaltyColumnsEnsured) {
+            return;
+        }
+        self::$penaltyColumnsEnsured = true;
+
+        $pdo = DB::pdo();
+        $cols = array_column($pdo->query('SHOW COLUMNS FROM matches')->fetchAll() ?: [], 'Field');
+        if (!in_array('penalty_home_score', $cols, true)) {
+            $pdo->exec(
+                'ALTER TABLE matches
+                 ADD COLUMN penalty_home_score TINYINT UNSIGNED NULL DEFAULT NULL AFTER regular_away_score,
+                 ADD COLUMN penalty_away_score TINYINT UNSIGNED NULL DEFAULT NULL AFTER penalty_home_score'
+            );
+        }
+    }
+
     public static function upsertFromFootballData(array $match): int
     {
+        self::ensurePenaltyScoreColumns();
         $pdo = DB::pdo();
         $apiFixtureId = (int)($match['id'] ?? 0);
         $kickoff = MatchDataMapper::kickoffToLocalStorage((string)($match['utcDate'] ?? ''));
-        $status = MatchDataMapper::mapStatus((string)($match['status'] ?? 'NS'));
+        $status = MatchDataMapper::mapStatusFromMatch($match);
         $stage = MatchDataMapper::buildStage($match);
         $stageKey = MatchDataMapper::stageKey($match);
         $matchday = MatchDataMapper::matchday($match);
-        $scores = MatchDataMapper::scores($match);
-        $regularScores = MatchDataMapper::regularTimeScores($match);
+        $stored = MatchDataMapper::resolveStoredScores($match);
+        $scores = ['home' => $stored['home'], 'away' => $stored['away']];
+        $regularScores = ['home' => $stored['regular_home'], 'away' => $stored['regular_away']];
 
         $homeTeam = $match['homeTeam'] ?? [];
         $awayTeam = $match['awayTeam'] ?? [];
@@ -210,12 +235,14 @@ final class MatchModel
             'INSERT INTO matches (
                 api_fixture_id, home_team_id, away_team_id, kickoff_at, status,
                 home_score, away_score, stage, stage_key, matchday, group_code,
-                regular_home_score, regular_away_score, winner_team_id, venue, last_synced_at
+                regular_home_score, regular_away_score, penalty_home_score, penalty_away_score,
+                winner_team_id, venue, last_synced_at
              )
              VALUES (
                 :api_fixture_id, :home_team_id, :away_team_id, :kickoff_at, :status,
                 :home_score, :away_score, :stage, :stage_key, :matchday, :group_code,
-                :regular_home_score, :regular_away_score, :winner_team_id, :venue, NOW()
+                :regular_home_score, :regular_away_score, :penalty_home_score, :penalty_away_score,
+                :winner_team_id, :venue, NOW()
              )
              ON DUPLICATE KEY UPDATE
                 home_team_id = VALUES(home_team_id),
@@ -230,6 +257,8 @@ final class MatchModel
                 group_code = VALUES(group_code),
                 regular_home_score = VALUES(regular_home_score),
                 regular_away_score = VALUES(regular_away_score),
+                penalty_home_score = VALUES(penalty_home_score),
+                penalty_away_score = VALUES(penalty_away_score),
                 winner_team_id = VALUES(winner_team_id),
                 venue = COALESCE(NULLIF(TRIM(VALUES(venue)), \'\'), NULLIF(TRIM(venue), \'\')),
                 last_synced_at = NOW()'
@@ -248,6 +277,8 @@ final class MatchModel
             'group_code' => $groupCode,
             'regular_home_score' => $regularScores['home'],
             'regular_away_score' => $regularScores['away'],
+            'penalty_home_score' => $stored['penalty_home'],
+            'penalty_away_score' => $stored['penalty_away'],
             'winner_team_id' => $winnerTeamId,
             'venue' => $venue,
         ]);
@@ -276,6 +307,12 @@ final class MatchModel
         }
 
         $incomingFinished = in_array($status, $finished, true);
+        $existingLive = in_array($existingStatus, ['LIVE', 'HT'], true);
+
+        if ($incomingFinished && $existingLive) {
+            return [$status, $scores];
+        }
+
         if (!$incomingFinished && $existingTotal > 0 && $incomingTotal === 0) {
             $scores = [
                 'home' => (int)$existing['home_score'],
