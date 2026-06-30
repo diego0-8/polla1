@@ -103,6 +103,8 @@ final class ManualMatchUpdate
             'UPDATE matches
              SET home_score = :home_score,
                  away_score = :away_score,
+                 regular_home_score = :home_score,
+                 regular_away_score = :away_score,
                  status = :status,
                  winner_team_id = :winner_team_id,
                  last_synced_at = NOW()

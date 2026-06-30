@@ -42,6 +42,19 @@ final class PaymentReminderService
         return new \DateTimeImmutable($deadline, self::timezone());
     }
 
+    public static function deadlineFormatted(): string
+    {
+        $months = [
+            1 => 'enero', 2 => 'febrero', 3 => 'marzo', 4 => 'abril',
+            5 => 'mayo', 6 => 'junio', 7 => 'julio', 8 => 'agosto',
+            9 => 'septiembre', 10 => 'octubre', 11 => 'noviembre', 12 => 'diciembre',
+        ];
+        $dt = self::deadline();
+        $month = (int)$dt->format('n');
+
+        return $dt->format('j') . ' de ' . ($months[$month] ?? $dt->format('F')) . ' de ' . $dt->format('Y');
+    }
+
     public static function countdownStartsAt(): \DateTimeImmutable
     {
         return self::deadline()->modify('-24 hours');

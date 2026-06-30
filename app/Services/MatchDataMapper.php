@@ -135,6 +135,13 @@ final class MatchDataMapper
      */
     public static function scoresForSettlement(array $dbMatch): array
     {
+        if (($dbMatch['data_source'] ?? '') === 'manual') {
+            return [
+                'home' => (int)($dbMatch['home_score'] ?? 0),
+                'away' => (int)($dbMatch['away_score'] ?? 0),
+            ];
+        }
+
         $status = strtoupper((string)($dbMatch['status'] ?? ''));
 
         if ($status === 'PEN') {

@@ -24,6 +24,51 @@ final class MatchStats
     }
 
     /**
+     * Actualiza solo total_goals y btts en match_stats desde el marcador reglamentario del partido.
+     * No modifica córners ni tarjetas (esos son manuales).
+     */
+    public static function syncGoalsAndBttsFromMatch(int $matchId): bool
+    {
+        $match = MatchModel::findById($matchId);
+        if ($match === null) {
+            return false;
+        }
+
+        $status = strtoupper((string)($match['status'] ?? ''));
+        if (!in_array($status, ['FT', 'PEN', 'AET'], true)) {
+            return false;
+        }
+
+        $scoring = MatchDataMapper::scoresForSettlement($match);
+        $totalGoals = $scoring['home'] + $scoring['away'];
+        $btts = ($scoring['home'] > 0 && $scoring['away'] > 0) ? 1 : 0;
+
+        $existing = self::apiRowForMatch($matchId);
+        if ($existing === null) {
+            DB::pdo()->prepare(
+                'INSERT INTO match_stats (match_id, total_goals, btts, synced_at)
+                 VALUES (:match_id, :total_goals, :btts, NOW())'
+            )->execute([
+                'match_id' => $matchId,
+                'total_goals' => $totalGoals,
+                'btts' => $btts,
+            ]);
+        } else {
+            DB::pdo()->prepare(
+                'UPDATE match_stats
+                 SET total_goals = :total_goals, btts = :btts, synced_at = NOW()
+                 WHERE match_id = :match_id'
+            )->execute([
+                'match_id' => $matchId,
+                'total_goals' => $totalGoals,
+                'btts' => $btts,
+            ]);
+        }
+
+        return true;
+    }
+
+    /**
      * En partidos FT/PEN/AET, deriva total_goals y btts del marcador cuando faltan en match_stats
      * (común en 0-0 sin eventos en la API).
      *

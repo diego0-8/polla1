@@ -133,6 +133,10 @@ final class FootballDataSyncService
                 || ($before && self::kickoffRecentlyStarted((string)$before['kickoff_at']))
             );
 
+            if ($oldSnap !== null) {
+                $shouldFetchDetail = $shouldFetchDetail && $oldSnap !== $newSnap;
+            }
+
             if ($shouldFetchDetail) {
                 try {
                     $this->syncMatchEvents($apiId, $matchId);

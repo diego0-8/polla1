@@ -7,7 +7,6 @@ use App\Core\DB;
 use App\Models\ManualMatchUpdate;
 use App\Models\MatchEvent;
 use App\Models\MatchModel;
-use App\Services\TournamentTeamStatusService;
 
 final class SettleService
 {
@@ -290,8 +289,6 @@ final class SettleService
             $pickTeamId = (int)$row['champion_team_id'];
             if ($pickTeamId !== $winnerTeamId) {
                 $result = ['points' => 0, 'reason' => 'champion_none'];
-            } elseif (!TournamentTeamStatusService::isStillInPlay($pickTeamId, $finalSeason)) {
-                $result = ['points' => 0, 'reason' => 'champion_none'];
             } else {
                 $result = ScoringService::championBonusPoints($pickTeamId, $winnerTeamId);
             }
@@ -393,23 +390,16 @@ final class SettleService
         $resolved = ManualMatchUpdate::applyToMatch($match, MatchEvent::forMatch($matchId));
 
         if ($dbMatch !== null) {
-            $scoring = MatchDataMapper::scoresForSettlement($dbMatch);
-            $resolved['home_score'] = $scoring['home'];
-            $resolved['away_score'] = $scoring['away'];
+            foreach (['regular_home_score', 'regular_away_score', 'penalty_home_score', 'penalty_away_score'] as $col) {
+                $resolved[$col] = $dbMatch[$col] ?? null;
+            }
         }
 
-        $winnerTeamId = isset($resolved['winner_team_id']) && $resolved['winner_team_id'] !== null
-            ? (int)$resolved['winner_team_id']
-            : null;
-        if ($winnerTeamId === null) {
-            $winnerTeamId = self::inferWinnerTeamId([
-                'match_status' => (string)$resolved['status'],
-                'real_home' => (int)$resolved['home_score'],
-                'real_away' => (int)$resolved['away_score'],
-                'home_team_id' => (int)$resolved['home_team_id'],
-                'away_team_id' => (int)$resolved['away_team_id'],
-            ]);
-        }
+        $scoring = MatchDataMapper::scoresForSettlement($resolved);
+        $resolved['home_score'] = $scoring['home'];
+        $resolved['away_score'] = $scoring['away'];
+
+        $winnerTeamId = KnockoutAdvanceService::winnerTeamId($resolved);
 
         return [
             'real_home' => (int)$resolved['home_score'],
@@ -419,23 +409,4 @@ final class SettleService
         ];
     }
 
-    /** @param array<string, mixed> $row */
-    private static function inferWinnerTeamId(array $row): ?int
-    {
-        $status = strtoupper((string)($row['match_status'] ?? ''));
-        if (!in_array($status, self::FINISHED_STATUSES, true)) {
-            return null;
-        }
-
-        $home = (int)($row['real_home'] ?? 0);
-        $away = (int)($row['real_away'] ?? 0);
-        if ($home > $away) {
-            return (int)$row['home_team_id'];
-        }
-        if ($away > $home) {
-            return (int)$row['away_team_id'];
-        }
-
-        return null;
-    }
 }

@@ -12,7 +12,7 @@ $showBetStatus = $showBetStatus ?? false;
 $status = (string)($m['status'] ?? 'NS');
 $scoreLine = MatchView::scorePresentation($m);
 $finished = in_array($status, ['FT', 'PEN', 'AET'], true);
-$showScore = in_array($status, ['FT', 'LIVE', 'HT', 'PEN'], true)
+$showScore = in_array($status, ['FT', 'LIVE', 'HT', 'PEN', 'AET'], true)
     || ((int)($m['home_score'] ?? 0) + (int)($m['away_score'] ?? 0)) > 0;
 $hasBet = !empty($m['has_bet']);
 ?>

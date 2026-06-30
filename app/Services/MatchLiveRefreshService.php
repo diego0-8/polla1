@@ -83,7 +83,7 @@ final class MatchLiveRefreshService
     public static function shouldRefresh(array $match): bool
     {
         $status = strtoupper((string)($match['status'] ?? 'NS'));
-        if (in_array($status, ['LIVE', 'HT', 'FT', 'PEN', 'AET'], true)) {
+        if (in_array($status, ['LIVE', 'HT'], true)) {
             return true;
         }
 
@@ -95,6 +95,11 @@ final class MatchLiveRefreshService
         try {
             $kickoff = MatchDataMapper::kickoffFromStorage($kickoffRaw);
             $now = new \DateTimeImmutable('now', MatchDataMapper::appTimezone());
+
+            if (in_array($status, ['FT', 'PEN', 'AET'], true)) {
+                return $now <= $kickoff->modify('+6 hours') && $now >= $kickoff->modify('-15 minutes');
+            }
+
             $windowStart = $now->modify('-72 hours');
             $windowEnd = $now->modify('+15 minutes');
 

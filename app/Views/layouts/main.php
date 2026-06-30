@@ -103,7 +103,7 @@ $viewFile = __DIR__ . '/../' . $viewName . '.php';
         <div class="modal-body text-center text-dark">
           <p class="mb-3 text-dark">
             Para participar debes pagar <strong>$<?= htmlspecialchars($paymentAmountCop) ?> </strong>
-            antes del <strong>26 de junio de 2026</strong>.
+            antes del <strong><?= htmlspecialchars(PaymentReminderService::deadlineFormatted()) ?></strong>.
           </p>
           <img
             src="<?= htmlspecialchars($asset(PaymentReminderService::qrImagePath())) ?>"

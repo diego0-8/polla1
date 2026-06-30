@@ -31,6 +31,7 @@ final class MatchView
             'PST' => 'Aplazado',
             'CANC' => 'Cancelado',
             'PEN' => 'Penales',
+            'AET' => 'Tras prórroga',
             default => $status,
         };
     }
@@ -39,7 +40,7 @@ final class MatchView
     {
         return match (strtoupper($status)) {
             'LIVE', 'HT' => 'badge badge-live',
-            'FT' => 'badge badge-ft',
+            'FT', 'PEN', 'AET' => 'badge badge-ft',
             'NS' => 'badge badge-ns',
             default => 'badge bg-secondary',
         };
